@@ -1,80 +1,72 @@
-import type { AnalysisResult } from "./types";
+import { AnalysisResult } from './types';
 
-const SYSTEM_PROMPT = `You are ContractGuard, an expert contract attorney specializing in freelancer and independent contractor agreements. Your job is to analyze contracts and identify clauses that are risky or unfavorable to the freelancer/contractor.
+export async function analyzeContract(text: string, apiKey: string): Promise<AnalysisResult> {
+  const truncated = text.slice(0, 15000);
 
-Analyze the contract and respond ONLY with a valid JSON object. No markdown, no explanation outside the JSON.
+  const prompt = `あなたは契約書リスク分析の専門家です。以下の契約書を分析し、フリーランサーや個人開発者にとってのリスクを特定してください。
 
-JSON structure:
+契約書の内容:
+---
+${truncated}
+---
+
+以下のJSON形式で回答してください。JSONのみを返し、前後に説明文を付けないでください:
+
 {
-  "contractType": "string (e.g. 'Freelance Service Agreement', 'NDA', 'Employment Contract')",
-  "overallRisk": "HIGH" | "MEDIUM" | "LOW",
-  "summary": "2-3 sentence summary of the contract and main risks",
-  "clauses": [
+  "summary": "この契約書の総合的なリスク評価（2〜3文で）",
+  "items": [
     {
-      "id": "unique string",
-      "title": "Short clause title",
-      "originalText": "The exact problematic text from the contract (quote it)",
-      "riskLevel": "HIGH" | "MEDIUM" | "LOW",
-      "riskReason": "Why this is risky for the freelancer (1-2 sentences)",
-      "suggestion": "Specific rewritten version of this clause that protects the freelancer",
-      "category": "PAYMENT" | "INTELLECTUAL_PROPERTY" | "LIABILITY" | "TERMINATION" | "SCOPE_CREEP" | "CONFIDENTIALITY" | "DISPUTE" | "OTHER"
+      "title": "リスク項目のタイトル（例：知的財産権の一方的譲渡）",
+      "risk": "high" または "medium" または "low",
+      "description": "なぜこれがリスクなのかの説明（1〜2文）",
+      "excerpt": "問題のある条文の引用（ない場合は省略）",
+      "suggestion": "修正案または交渉のヒント（1〜2文）"
     }
   ]
 }
 
-Focus on:
-- Payment terms (net-90, no kill fee, unlimited revisions)
-- IP ownership (work-for-hire clauses that take all rights)
-- Liability (unlimited liability, indemnification overreach)
-- Termination (unilateral termination without payment)
-- Non-compete / non-solicitation overreach
-- Scope creep (vague deliverables)
-- Confidentiality (overly broad NDAs)
+チェック項目：
+- 知的財産権・著作権の帰属
+- 支払い条件・支払いタイミング
+- 無制限の修正要求・スコープクリープ
+- 契約解除条件と違約金
+- 競業避止義務・秘密保持
+- 損害賠償の上限
+- 準拠法・管轄裁判所
+- その他フリーランサーに不利な条項
 
-Be thorough. Identify 4-8 specific clauses. If the contract is generally fair, still flag any clauses that could be improved.`;
+リスクが見つからない場合は items を空配列にしてください。`;
 
-export async function analyzeContract(
-  contractText: string,
-  apiKey: string
-): Promise<AnalysisResult> {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
     headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: "claude-opus-4-5",
+      model: 'claude-opus-4-5',
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Please analyze this contract and identify all risky clauses:\n\n${contractText.slice(0, 12000)}`,
-        },
-      ],
+      messages: [{ role: 'user', content: prompt }],
     }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    const msg = (err as { error?: { message?: string } }).error?.message || response.statusText;
-    throw new Error(`Claude API error: ${msg}`);
+    const msg = (err as { error?: { message?: string } })?.error?.message || response.statusText;
+    if (response.status === 401) throw new Error('APIキーが無効です。正しいキーを入力してください。');
+    if (response.status === 429) throw new Error('APIのレート制限に達しました。しばらく待ってから再試行してください。');
+    throw new Error(`API エラー: ${msg}`);
   }
 
-  const data = await response.json() as {
-    content: Array<{ type: string; text: string }>;
-  };
-  const text = data.content.find((c) => c.type === "text")?.text || "";
+  const data = await response.json();
+  const content = data.content?.[0]?.text || '';
 
-  try {
-    const parsed = JSON.parse(text) as Omit<AnalysisResult, "analyzedAt">;
-    return {
-      ...parsed,
-      analyzedAt: new Date().toISOString(),
-    };
-  } catch {
-    throw new Error("Failed to parse AI response. Please try again.");
-  }
+  // Parse JSON from response
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('AIの応答を解析できませんでした。再試行してください。');
+
+  const parsed = JSON.parse(jsonMatch[0]) as AnalysisResult;
+  return parsed;
 }
