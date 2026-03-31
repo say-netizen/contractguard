@@ -3,7 +3,6 @@
 import { useState } from 'react';
 // 実際のファイル名「LandingPage (1)」に合わせてインポートします
 import LandingPage from './components/LandingPage';
-
 // もし Analyzing.tsx や AnalysisView.tsx を使うならここに追加
 // import { Analyzing } from './components/Analyzing';
 // import { AnalysisView } from './components/AnalysisView';
