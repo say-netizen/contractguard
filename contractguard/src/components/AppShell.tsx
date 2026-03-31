@@ -25,7 +25,6 @@ export default function AppShell({ onBack }: Props) {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Header */}
       <header className="border-b border-white/5 px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -38,9 +37,8 @@ export default function AppShell({ onBack }: Props) {
             </div>
           </div>
 
-          {/* Progress */}
           <div className="flex items-center gap-2">
-            {['APIキー', 'アップロード', '分析中', '結果'].map((label, i) => (
+            {['API Key', 'Upload', 'Analyzing', 'Results'].map((label, i) => (
               <div key={label} className="flex items-center gap-2">
                 <div className={`flex items-center gap-1.5 text-xs font-medium ${
                   i === stepIndex ? 'text-emerald-400' :
@@ -62,43 +60,22 @@ export default function AppShell({ onBack }: Props) {
         </div>
       </header>
 
-      {/* Content */}
       <main className="max-w-3xl mx-auto px-6 py-12">
         {step === 'apikey' && (
-          <StepApiKey
-            apiKey={apiKey}
-            onApiKeyChange={setApiKey}
-            onNext={() => setStep('upload')}
-          />
+          <StepApiKey apiKey={apiKey} onApiKeyChange={setApiKey} onNext={() => setStep('upload')} />
         )}
         {step === 'upload' && (
-          <StepUpload
-            file={file}
-            onFileChange={setFile}
-            onNext={() => setStep('analyzing')}
-            onBack={() => setStep('apikey')}
-          />
+          <StepUpload file={file} onFileChange={setFile} onNext={() => setStep('analyzing')} onBack={() => setStep('apikey')} />
         )}
         {step === 'analyzing' && file && (
-          <StepAnalyzing
-            file={file}
-            apiKey={apiKey}
-            onComplete={(result) => {
-              setResults(result);
-              setStep('results');
-            }}
+          <StepAnalyzing file={file} apiKey={apiKey}
+            onComplete={(result) => { setResults(result); setStep('results'); }}
             onError={() => setStep('upload')}
           />
         )}
         {step === 'results' && results && (
-          <StepResults
-            results={results}
-            fileName={file?.name || ''}
-            onReset={() => {
-              setFile(null);
-              setResults(null);
-              setStep('upload');
-            }}
+          <StepResults results={results} fileName={file?.name || ''}
+            onReset={() => { setFile(null); setResults(null); setStep('upload'); }}
           />
         )}
       </main>
