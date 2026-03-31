@@ -18,11 +18,11 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
     setError('');
     const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'];
     if (!allowed.includes(f.type) && !f.name.match(/\.(pdf|docx|doc)$/i)) {
-      setError('PDF または Word ファイル（.pdf, .docx, .doc）のみ対応しています');
+      setError('Only PDF or Word files (.pdf, .docx, .doc) are supported.');
       return;
     }
     if (f.size > 10 * 1024 * 1024) {
-      setError('ファイルサイズは10MB以内にしてください');
+      setError('File size must be under 10MB.');
       return;
     }
     onFileChange(f);
@@ -35,32 +35,26 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
     if (f) handleFile(f);
   }, []);
 
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragging(true); };
-  const onDragLeave = () => setDragging(false);
-
   return (
     <div className="max-w-lg mx-auto">
       <div className="text-center mb-10">
         <div className="bg-emerald-500/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5">
           <Upload className="w-8 h-8 text-emerald-400" />
         </div>
-        <h1 className="text-3xl font-bold mb-3">契約書をアップロード</h1>
+        <h1 className="text-3xl font-bold mb-3">Upload your contract</h1>
         <p className="text-white/50">
-          PDF または Word ファイルをアップロードしてください。<br />
-          ファイルは分析後に即座に削除されます。
+          Drop a PDF or Word file below.<br />
+          Your file is discarded immediately after analysis.
         </p>
       </div>
 
-      {/* Drop zone */}
       {!file ? (
         <div
           onDrop={onDrop}
-          onDragOver={onDragOver}
-          onDragLeave={onDragLeave}
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
           className={`border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all ${
-            dragging
-              ? 'border-emerald-400 bg-emerald-500/10'
-              : 'border-white/15 hover:border-white/30 hover:bg-white/3'
+            dragging ? 'border-emerald-400 bg-emerald-500/10' : 'border-white/15 hover:border-white/30 hover:bg-white/3'
           }`}
           onClick={() => document.getElementById('file-input')?.click()}
         >
@@ -72,12 +66,12 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
           <Upload className={`w-12 h-12 mx-auto mb-4 transition-colors ${dragging ? 'text-emerald-400' : 'text-white/20'}`} />
-          <p className="text-white/60 font-medium mb-1">ここにファイルをドラッグ&ドロップ</p>
-          <p className="text-white/30 text-sm mb-4">または</p>
+          <p className="text-white/60 font-medium mb-1">Drag & drop your contract here</p>
+          <p className="text-white/30 text-sm mb-4">or</p>
           <div className="inline-flex items-center gap-2 bg-white/8 hover:bg-white/12 border border-white/15 rounded-lg px-4 py-2 text-sm font-medium transition-all">
-            ファイルを選択
+            Browse files
           </div>
-          <p className="text-white/20 text-xs mt-4">PDF, DOCX, DOC · 最大10MB</p>
+          <p className="text-white/20 text-xs mt-4">PDF, DOCX, DOC · Max 10MB</p>
         </div>
       ) : (
         <div className="border border-emerald-500/30 bg-emerald-500/5 rounded-2xl p-6">
@@ -89,10 +83,7 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
               <p className="font-semibold truncate">{file.name}</p>
               <p className="text-white/40 text-sm">{(file.size / 1024).toFixed(0)} KB</p>
             </div>
-            <button
-              onClick={() => onFileChange(null)}
-              className="text-white/30 hover:text-white/60 transition-colors"
-            >
+            <button onClick={() => onFileChange(null)} className="text-white/30 hover:text-white/60 transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -106,12 +97,11 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
         </div>
       )}
 
-      {/* Disclaimer */}
       <div className="mt-6 bg-yellow-500/5 border border-yellow-500/15 rounded-xl p-4">
         <p className="text-yellow-400/70 text-sm leading-relaxed">
-          ⚠️ <strong>免責事項：</strong>アップロードされた契約書の内容はClaude API（Anthropic）に送信されます。
-          機密性の高い契約書については、事前に弁護士にご相談ください。
-          当ツールの分析結果は法的アドバイスではありません。
+          ⚠ <strong>Disclaimer:</strong> The contents of your contract will be sent to the Claude API (Anthropic) for analysis.
+          For high-stakes contracts, always consult a qualified attorney.
+          This tool does not provide legal advice.
         </p>
       </div>
 
@@ -121,14 +111,14 @@ export default function StepUpload({ file, onFileChange, onNext, onBack }: Props
           className="flex items-center gap-2 bg-white/5 hover:bg-white/8 border border-white/10 font-medium px-6 py-4 rounded-xl transition-all"
         >
           <ChevronLeft className="w-4 h-4" />
-          戻る
+          Back
         </button>
         <button
-          onClick={() => { if (!file) { setError('ファイルを選択してください'); return; } onNext(); }}
+          onClick={() => { if (!file) { setError('Please select a file first.'); return; } onNext(); }}
           disabled={!file}
           className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-30 disabled:cursor-not-allowed text-black font-bold py-4 rounded-xl transition-all group"
         >
-          AI分析を開始する
+          Start AI Analysis
           <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
         </button>
       </div>
