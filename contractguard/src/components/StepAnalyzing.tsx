@@ -14,12 +14,12 @@ interface Props {
 }
 
 const STEPS = [
-  'ファイルを読み込んでいます...',
-  'テキストを抽出しています...',
-  'AIが条項を解析しています...',
-  'リスクを評価しています...',
-  '修正案を生成しています...',
-  'レポートを作成しています...',
+  'Reading file...',
+  'Extracting text...',
+  'AI is parsing clauses...',
+  'Assessing risk levels...',
+  'Generating revision suggestions...',
+  'Building report...',
 ];
 
 export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Props) {
@@ -31,7 +31,6 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
 
     const run = async () => {
       try {
-        // Step progress
         const interval = setInterval(() => {
           setStepIndex((i) => Math.min(i + 1, STEPS.length - 2));
         }, 2000);
@@ -46,7 +45,7 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
         }
       } catch (e: unknown) {
         if (!cancelled) {
-          const msg = e instanceof Error ? e.message : '分析中にエラーが発生しました';
+          const msg = e instanceof Error ? e.message : 'An error occurred during analysis.';
           setErrorMsg(msg);
         }
       }
@@ -62,14 +61,14 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
         <div className="bg-red-500/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5">
           <Shield className="w-8 h-8 text-red-400" />
         </div>
-        <h2 className="text-2xl font-bold mb-3">エラーが発生しました</h2>
+        <h2 className="text-2xl font-bold mb-3">Something went wrong</h2>
         <p className="text-white/50 mb-2 leading-relaxed">{errorMsg}</p>
-        <p className="text-white/30 text-sm mb-8">APIキーが正しいか、残高があるかご確認ください。</p>
+        <p className="text-white/30 text-sm mb-8">Please check your API key and try again.</p>
         <button
           onClick={onError}
           className="bg-white/8 hover:bg-white/12 border border-white/15 font-medium px-8 py-3 rounded-xl transition-all"
         >
-          戻って再試行する
+          Go back and retry
         </button>
       </div>
     );
@@ -77,7 +76,6 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
 
   return (
     <div className="max-w-lg mx-auto text-center py-20">
-      {/* Spinner */}
       <div className="relative w-20 h-20 mx-auto mb-8">
         <div className="absolute inset-0 rounded-full border-2 border-white/5" />
         <div className="absolute inset-0 rounded-full border-2 border-t-emerald-400 animate-spin" />
@@ -86,15 +84,13 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
         </div>
       </div>
 
-      <h2 className="text-2xl font-bold mb-3">AIが分析しています</h2>
+      <h2 className="text-2xl font-bold mb-3">Analyzing your contract</h2>
       <p className="text-emerald-400 mb-12 h-6 transition-all">{STEPS[stepIndex]}</p>
 
-      {/* Progress steps */}
       <div className="space-y-3 text-left">
         {STEPS.slice(0, -1).map((s, i) => (
           <div key={s} className={`flex items-center gap-3 text-sm transition-all ${
-            i < stepIndex ? 'text-white/40' :
-            i === stepIndex ? 'text-white' : 'text-white/15'
+            i < stepIndex ? 'text-white/40' : i === stepIndex ? 'text-white' : 'text-white/15'
           }`}>
             <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 transition-all ${
               i < stepIndex ? 'bg-emerald-500/20 text-emerald-400' :
@@ -109,7 +105,7 @@ export default function StepAnalyzing({ file, apiKey, onComplete, onError }: Pro
       </div>
 
       <p className="text-white/20 text-xs mt-12">
-        契約書の長さによって1〜2分かかる場合があります
+        This usually takes 10–30 seconds depending on contract length.
       </p>
     </div>
   );
