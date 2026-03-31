@@ -57,7 +57,7 @@ export default function LandingPage({ onStart }: Props) {
           {/* 最後にStripeへ飛ばす場所（ボタン例） */}
           <div className="mt-12 text-center border-t border-white/5 pt-12">
             <button 
-              onClick={() => window.location.href = 'あなたのStripeリンク'} 
+              onClick={() => window.location.href = 'https://buy.stripe.com/4gMcN62Gug3ycFK6jP9R603'} 
               className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-10 py-5 rounded-2xl text-xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.3)]"
             >
               Get Full PDF Report - $9
