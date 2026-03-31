@@ -2,7 +2,7 @@
 
 import { Shield, AlertTriangle, FileText, Zap, CheckCircle, ArrowRight, Lock } from 'lucide-react';
 
-const STRIPE_CG_LINK = "あなたのStripe決済リンクURL"; 
+const STRIPE_CG_LINK = "https://buy.stripe.com/4gMcN62Gug3ycFK6jP9R603"; 
 
 interface Props {
   onStart: () => void;
