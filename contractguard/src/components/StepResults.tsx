@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, ExternalLink } from 'lucide-react';
 import { AnalysisResult, RiskItem } from '@/lib/types';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   fileName: string;
   onReset: () => void;
 }
+
+const STRIPE_LINK = 'https://buy.stripe.com/8x29AU5SG6sYgW0fUp9R604';
 
 const RISK_CONFIG = {
   high:   { label: 'HIGH',   color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: AlertTriangle },
@@ -37,7 +39,9 @@ function RiskCard({ item }: { item: RiskItem }) {
           </div>
           <p className="text-white/50 text-sm truncate">{item.description}</p>
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-white/30 shrink-0 mt-1" /> : <ChevronDown className="w-4 h-4 text-white/30 shrink-0 mt-1" />}
+        {open
+          ? <ChevronUp className="w-4 h-4 text-white/30 shrink-0 mt-1" />
+          : <ChevronDown className="w-4 h-4 text-white/30 shrink-0 mt-1" />}
       </button>
 
       {open && (
@@ -45,7 +49,7 @@ function RiskCard({ item }: { item: RiskItem }) {
           {item.excerpt && (
             <div>
               <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">Original clause</p>
-              <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 py-1 italic ${cfg.color}/70 border-current`}>
+              <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 py-1 italic ${cfg.color} border-current opacity-70`}>
                 {item.excerpt}
               </blockquote>
             </div>
@@ -68,48 +72,245 @@ function RiskCard({ item }: { item: RiskItem }) {
   );
 }
 
+async function generatePDF(results: AnalysisResult, fileName: string) {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210;
+  const MARGIN = 20;
+  const COL = W - MARGIN * 2;
+  let y = 20;
+
+  const addText = (text: string, size: number, bold: boolean, color: [number,number,number], indent = 0) => {
+    doc.setFontSize(size);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(...color);
+    const lines = doc.splitTextToSize(text, COL - indent);
+    lines.forEach((line: string) => {
+      if (y > 270) { doc.addPage(); y = 20; }
+      doc.text(line, MARGIN + indent, y);
+      y += size * 0.45;
+    });
+    y += 2;
+  };
+
+  const drawRect = (h: number, r: [number,number,number]) => {
+    if (y + h > 275) { doc.addPage(); y = 20; }
+    doc.setFillColor(...r);
+    doc.roundedRect(MARGIN, y, COL, h, 2, 2, 'F');
+  };
+
+  // Header bar
+  doc.setFillColor(16, 185, 129);
+  doc.rect(0, 0, 210, 12, 'F');
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 0, 0);
+  doc.text('CONTRACTGUARD — CONFIDENTIAL ANALYSIS REPORT', MARGIN, 8);
+  y = 22;
+
+  // Title
+  addText('Contract Risk Analysis Report', 22, true, [255, 255, 255]);
+  addText(`File: ${fileName}`, 9, false, [150, 150, 150]);
+  addText(`Generated: ${new Date().toLocaleString('en-US')}`, 9, false, [150, 150, 150]);
+  y += 4;
+
+  // Overall risk badge
+  const overallRisk = results.items?.filter(i => i.risk === 'high').length > 0 ? 'HIGH'
+    : results.items?.filter(i => i.risk === 'medium').length > 0 ? 'MEDIUM' : 'LOW';
+  const riskColor: Record<string, [number,number,number]> = {
+    HIGH: [80, 20, 20], MEDIUM: [80, 60, 10], LOW: [10, 60, 40]
+  };
+  const riskText: Record<string, [number,number,number]> = {
+    HIGH: [220, 80, 80], MEDIUM: [220, 180, 60], LOW: [80, 200, 130]
+  };
+  drawRect(14, riskColor[overallRisk]);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...riskText[overallRisk]);
+  doc.text(`OVERALL RISK: ${overallRisk}`, MARGIN + 4, y + 9);
+  y += 18;
+
+  // Summary
+  addText('Summary', 13, true, [255, 255, 255]);
+  if (results.summary) addText(results.summary, 10, false, [200, 200, 200]);
+  y += 4;
+
+  // Stats
+  const high = results.items?.filter(i => i.risk === 'high').length || 0;
+  const med  = results.items?.filter(i => i.risk === 'medium').length || 0;
+  const low  = results.items?.filter(i => i.risk === 'low').length || 0;
+  addText(`Issues found: ${high} High · ${med} Medium · ${low} Low`, 10, false, [180, 180, 180]);
+  y += 6;
+
+  // Divider
+  doc.setDrawColor(50, 50, 50);
+  doc.line(MARGIN, y, W - MARGIN, y);
+  y += 8;
+
+  // Clauses
+  addText('Detailed Findings', 14, true, [255, 255, 255]);
+  y += 2;
+
+  for (const item of (results.items || [])) {
+    const cfg = RISK_CONFIG[item.risk as keyof typeof RISK_CONFIG];
+    const bgMap: Record<string, [number,number,number]> = {
+      high: [60, 15, 15], medium: [60, 45, 10], low: [10, 30, 50]
+    };
+    const textMap: Record<string, [number,number,number]> = {
+      high: [220, 80, 80], medium: [220, 180, 60], low: [80, 160, 220]
+    };
+
+    // Card
+    const cardH = 8 + (item.excerpt ? 20 : 0) + 16 + (item.suggestion ? 20 : 0) + 10;
+    drawRect(cardH, bgMap[item.risk]);
+
+    let cy = y + 7;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...textMap[item.risk]);
+    doc.text(`[${cfg.label}]`, MARGIN + 3, cy);
+    doc.setTextColor(255, 255, 255);
+    doc.text(item.title, MARGIN + 20, cy);
+    cy += 7;
+
+    if (item.excerpt) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(180, 180, 180);
+      const excerptLines = doc.splitTextToSize(`"${item.excerpt}"`, COL - 10);
+      excerptLines.slice(0, 2).forEach((line: string) => {
+        doc.text(line, MARGIN + 5, cy);
+        cy += 5;
+      });
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(200, 200, 200);
+    const descLines = doc.splitTextToSize(item.description, COL - 8);
+    descLines.slice(0, 2).forEach((line: string) => {
+      doc.text(line, MARGIN + 5, cy);
+      cy += 5;
+    });
+
+    if (item.suggestion) {
+      cy += 2;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(80, 200, 130);
+      doc.text('Suggested revision:', MARGIN + 5, cy);
+      cy += 5;
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(150, 220, 180);
+      const sugLines = doc.splitTextToSize(item.suggestion, COL - 10);
+      sugLines.slice(0, 2).forEach((line: string) => {
+        doc.text(line, MARGIN + 5, cy);
+        cy += 5;
+      });
+    }
+
+    y += cardH + 4;
+  }
+
+  // Disclaimer
+  y += 6;
+  doc.setDrawColor(50, 50, 50);
+  doc.line(MARGIN, y, W - MARGIN, y);
+  y += 8;
+  addText('Legal Disclaimer & Privacy Notice', 11, true, [150, 150, 150]);
+  addText(
+    'This report is generated by artificial intelligence and is provided for informational purposes only. ' +
+    'It does not constitute legal advice and should not be relied upon as such. ContractGuard makes no ' +
+    'representations or warranties regarding the accuracy, completeness, or applicability of this analysis ' +
+    'to your specific situation. Always consult a qualified attorney before signing any contract.',
+    8, false, [120, 120, 120]
+  );
+  y += 4;
+  addText(
+    'Privacy: Your contract content was transmitted directly to the Anthropic Claude API for analysis. ' +
+    'ContractGuard does not store, log, or retain your contract data on its servers. Your API key is ' +
+    'held in your browser session only and is never sent to ContractGuard infrastructure. ' +
+    'By using this service you acknowledge that your contract contents are processed by Anthropic in ' +
+    'accordance with their Privacy Policy at anthropic.com/privacy.',
+    8, false, [120, 120, 120]
+  );
+
+  // Footer
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(`ContractGuard · contractguard.vercel.app · Page ${i} of ${pageCount}`, MARGIN, 290);
+    doc.text('NOT LEGAL ADVICE', W - MARGIN, 290, { align: 'right' });
+  }
+
+  doc.save(`contractguard-report-${Date.now()}.pdf`);
+}
+
 export default function StepResults({ results, fileName, onReset }: Props) {
-  const high   = results.items.filter((i) => i.risk === 'high');
-  const medium = results.items.filter((i) => i.risk === 'medium');
-  const low    = results.items.filter((i) => i.risk === 'low');
+  const [pdfReady, setPdfReady] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
+  const high   = results.items?.filter((i) => i.risk === 'high') || [];
+  const medium = results.items?.filter((i) => i.risk === 'medium') || [];
+  const low    = results.items?.filter((i) => i.risk === 'low') || [];
   const overallRisk = high.length > 0 ? 'high' : medium.length > 0 ? 'medium' : 'low';
-  const overallCfg = RISK_CONFIG[overallRisk];
+  const overallCfg  = RISK_CONFIG[overallRisk];
 
-  const handleDownload = () => {
-    const lines = [
-      `ContractGuard Analysis Report`,
-      `File: ${fileName}`,
-      `Date: ${new Date().toLocaleString('en-US')}`,
-      `Overall Risk: ${overallCfg.label}`,
-      ``,
-      `Summary: ${results.summary}`,
-      ``,
-      `----------------------------------------------`,
-      ``,
-      ...results.items.map((item) => [
-        `[${RISK_CONFIG[item.risk].label}] ${item.title}`,
-        `Risk: ${item.description}`,
-        item.excerpt   ? `Original: ${item.excerpt}` : '',
-        item.suggestion ? `Suggestion: ${item.suggestion}` : '',
-        ``,
-      ].filter(Boolean).join('\n')),
-      `----------------------------------------------`,
-      `This report is not legal advice. Consult a qualified attorney for important contracts.`,
-    ].join('\n');
+  // Detect ?paid=true after Stripe redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === 'true') {
+      // Restore results from sessionStorage
+      const saved = sessionStorage.getItem('cg_results');
+      const savedFile = sessionStorage.getItem('cg_filename');
+      if (saved) {
+        try {
+          const restored = JSON.parse(saved) as AnalysisResult;
+          setPdfReady(true);
+          // Auto-download
+          generatePDF(restored, savedFile || fileName);
+          sessionStorage.removeItem('cg_results');
+          sessionStorage.removeItem('cg_filename');
+          // Clean URL
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch {
+          setPdfReady(false);
+        }
+      }
+    }
+  }, []);
 
-    const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `contractguard-report-${Date.now()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleStripeCheckout = () => {
+    // Save results to sessionStorage before redirect
+    sessionStorage.setItem('cg_results', JSON.stringify(results));
+    sessionStorage.setItem('cg_filename', fileName);
+    window.location.href = STRIPE_LINK;
+  };
+
+  const handleDownloadPDF = async () => {
+    setGenerating(true);
+    try {
+      await generatePDF(results, fileName);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Summary */}
+      {/* Paid success banner */}
+      {pdfReady && (
+        <div className="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+          <p className="text-emerald-300 text-sm font-medium">Payment confirmed! Your PDF has been downloaded.</p>
+        </div>
+      )}
+
+      {/* Summary card */}
       <div className={`rounded-2xl border p-6 mb-8 ${overallCfg.border} ${overallCfg.bg}`}>
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${overallCfg.bg}`}>
@@ -124,9 +325,15 @@ export default function StepResults({ results, fileName, onReset }: Props) {
             </div>
             <p className="text-white/60 text-sm leading-relaxed mb-4">{results.summary}</p>
             <div className="flex gap-4 text-sm">
-              <span className="flex items-center gap-1.5 text-red-400"><span className="w-2 h-2 rounded-full bg-red-400" /> High {high.length}</span>
-              <span className="flex items-center gap-1.5 text-yellow-400"><span className="w-2 h-2 rounded-full bg-yellow-400" /> Medium {medium.length}</span>
-              <span className="flex items-center gap-1.5 text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-400" /> Low {low.length}</span>
+              <span className="flex items-center gap-1.5 text-red-400">
+                <span className="w-2 h-2 rounded-full bg-red-400" /> High {high.length}
+              </span>
+              <span className="flex items-center gap-1.5 text-yellow-400">
+                <span className="w-2 h-2 rounded-full bg-yellow-400" /> Medium {medium.length}
+              </span>
+              <span className="flex items-center gap-1.5 text-blue-400">
+                <span className="w-2 h-2 rounded-full bg-blue-400" /> Low {low.length}
+              </span>
             </div>
           </div>
         </div>
@@ -134,11 +341,11 @@ export default function StepResults({ results, fileName, onReset }: Props) {
 
       {/* Risk items */}
       <div className="space-y-3 mb-8">
-        {results.items.length === 0 ? (
+        {results.items?.length === 0 ? (
           <div className="text-center py-12 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-            <p className="text-lg font-semibold text-emerald-400">No issues found</p>
-            <p className="text-white/40 text-sm mt-1">This contract looks clean.</p>
+            <p className="text-lg font-semibold text-emerald-400">No major issues found</p>
+            <p className="text-white/40 text-sm mt-1">This contract appears relatively safe.</p>
           </div>
         ) : (
           <>
@@ -164,6 +371,44 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         )}
       </div>
 
+      {/* PDF download CTA */}
+      <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+            <Download className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg mb-1">Download Full PDF Report</h3>
+            <p className="text-white/50 text-sm leading-relaxed">
+              Get a formatted PDF with all findings, original clause excerpts, and revision suggestions.
+              Perfect for sharing with a lawyer or client.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleStripeCheckout}
+          className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:scale-[1.02]"
+        >
+          <Download className="w-5 h-5" />
+          Download PDF Report — $9
+          <ExternalLink className="w-4 h-4 opacity-60" />
+        </button>
+        <p className="text-center text-white/25 text-xs mt-3">
+          Secure payment via Stripe · One-time purchase · Instant download after payment
+        </p>
+      </div>
+
+      {/* Already paid button */}
+      <div className="text-center mb-6">
+        <button
+          onClick={handleDownloadPDF}
+          disabled={generating}
+          className="text-white/30 hover:text-white/60 text-sm underline underline-offset-2 transition-colors disabled:opacity-30"
+        >
+          {generating ? 'Generating PDF...' : 'Already paid? Click here to download'}
+        </button>
+      </div>
+
       {/* Actions */}
       <div className="flex gap-3">
         <button
@@ -173,18 +418,26 @@ export default function StepResults({ results, fileName, onReset }: Props) {
           <RefreshCw className="w-4 h-4" />
           Analyze another
         </button>
-        <button
-          onClick={handleDownload}
-          className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold py-4 rounded-xl transition-all"
-        >
-          <Download className="w-5 h-5" />
-          Download Report
-        </button>
       </div>
 
-      <p className="text-center text-white/20 text-xs mt-6">
-        This report is not legal advice. For important contracts, consult a qualified attorney.
-      </p>
+      {/* Disclaimer */}
+      <div className="mt-8 bg-white/2 border border-white/6 rounded-xl p-5">
+        <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Legal Disclaimer & Privacy</h4>
+        <p className="text-white/25 text-xs leading-relaxed mb-3">
+          <strong className="text-white/40">Not legal advice.</strong> This analysis is generated by AI and is for informational purposes only.
+          It does not constitute legal advice, and ContractGuard is not a law firm or attorney.
+          Results may be incomplete or inaccurate. Always consult a qualified attorney before signing any contract.
+        </p>
+        <p className="text-white/25 text-xs leading-relaxed">
+          <strong className="text-white/40">Data handling.</strong> Your contract content is transmitted directly to the Anthropic Claude API for analysis.
+          ContractGuard does not store, log, or retain your contract data on its servers at any point.
+          Your API key is held in your browser session only and is never sent to ContractGuard&apos;s infrastructure.
+          By using this service, you acknowledge that your contract is processed by Anthropic under their{' '}
+          <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-400/50 hover:text-emerald-400 underline">
+            Privacy Policy
+          </a>.
+        </p>
+      </div>
     </div>
   );
 }
