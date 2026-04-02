@@ -2,6 +2,7 @@
 import { useState } from 'react';
 
 // 「@/」を使うことで、src/components フォルダを直接参照するように統一します
+
 import Header from '@/components/Header';
 import Analyzing from '@/components/Analyzing';
 import AnalysisView from '@/components/AnalysisView';
