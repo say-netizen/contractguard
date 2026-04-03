@@ -71,10 +71,10 @@ export async function analyzeContract(
   const text = data.content.find((c) => c.type === "text")?.text || "";
 
   try {
-    const parsed = JSON.parse(text) as Omit<AnalysisResult, "analyzedAt">;
+    const parsed = JSON.parse(text) as AnalysisResult;
     return {
       ...parsed,
-      analyzedAt: new Date().toISOString(),
+
     };
   } catch {
     throw new Error("Failed to parse AI response. Please try again.");
