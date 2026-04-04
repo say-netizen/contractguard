@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, ExternalLink } from 'lucide-react';
-import { AnalysisResult, RiskItem } from '@/lib/types';
+import { AnalysisResult, RiskClause } from '@/lib/types';
 
 interface Props {
   results: AnalysisResult;
@@ -13,14 +13,14 @@ interface Props {
 const STRIPE_LINK = 'https://buy.stripe.com/8x29AU5SG6sYgW0fUp9R604';
 
 const RISK_CONFIG = {
-  high:   { label: 'HIGH',   color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: AlertTriangle },
-  medium: { label: 'MEDIUM', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', icon: AlertTriangle },
-  low:    { label: 'LOW',    color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   icon: Info },
+  HIGH:   { label: 'HIGH',   color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: AlertTriangle },
+  MEDIUM: { label: 'MEDIUM', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', icon: AlertTriangle },
+  LOW:    { label: 'LOW',    color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   icon: Info },
 };
 
-function RiskCard({ item }: { item: RiskItem }) {
-  const [open, setOpen] = useState(item.risk === 'high');
-  const cfg = RISK_CONFIG[item.risk];
+function RiskCard({ item }: { item: RiskClause }) {
+  const [open, setOpen] = useState(item.riskLevel === 'HIGH');
+  const cfg = RISK_CONFIG[item.riskLevel];
   const Icon = cfg.icon;
 
   return (
@@ -37,7 +37,7 @@ function RiskCard({ item }: { item: RiskItem }) {
             </span>
             <span className="font-semibold">{item.title}</span>
           </div>
-          <p className="text-white/50 text-sm truncate">{item.description}</p>
+          <p className="text-white/50 text-sm truncate">{item.riskReason}</p>
         </div>
         {open
           ? <ChevronUp className="w-4 h-4 text-white/30 shrink-0 mt-1" />
@@ -46,17 +46,17 @@ function RiskCard({ item }: { item: RiskItem }) {
 
       {open && (
         <div className="px-5 pb-5 space-y-4 border-t border-white/5 pt-4">
-          {item.excerpt && (
+          {item.originalText && (
             <div>
               <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">Original clause</p>
               <blockquote className={`text-sm leading-relaxed border-l-2 pl-4 py-1 italic ${cfg.color} border-current opacity-70`}>
-                {item.excerpt}
+                {item.originalText}
               </blockquote>
             </div>
           )}
           <div>
             <p className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2">Why it&apos;s risky</p>
-            <p className="text-sm text-white/70 leading-relaxed">{item.description}</p>
+            <p className="text-sm text-white/70 leading-relaxed">{item.riskReason}</p>
           </div>
           {item.suggestion && (
             <div>
@@ -100,7 +100,6 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
     doc.roundedRect(MARGIN, y, COL, h, 2, 2, 'F');
   };
 
-  // Header bar
   doc.setFillColor(16, 185, 129);
   doc.rect(0, 0, 210, 12, 'F');
   doc.setFontSize(8);
@@ -109,15 +108,12 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
   doc.text('CONTRACTGUARD — CONFIDENTIAL ANALYSIS REPORT', MARGIN, 8);
   y = 22;
 
-  // Title
   addText('Contract Risk Analysis Report', 22, true, [255, 255, 255]);
   addText(`File: ${fileName}`, 9, false, [150, 150, 150]);
   addText(`Generated: ${new Date().toLocaleString('en-US')}`, 9, false, [150, 150, 150]);
   y += 4;
 
-  // Overall risk badge
-  const overallRisk = results.items?.filter(i => i.risk === 'high').length > 0 ? 'HIGH'
-    : results.items?.filter(i => i.risk === 'medium').length > 0 ? 'MEDIUM' : 'LOW';
+  const overallRisk = results.overallRisk || 'LOW';
   const riskColor: Record<string, [number,number,number]> = {
     HIGH: [80, 20, 20], MEDIUM: [80, 60, 10], LOW: [10, 60, 40]
   };
@@ -131,54 +127,48 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
   doc.text(`OVERALL RISK: ${overallRisk}`, MARGIN + 4, y + 9);
   y += 18;
 
-  // Summary
   addText('Summary', 13, true, [255, 255, 255]);
   if (results.summary) addText(results.summary, 10, false, [200, 200, 200]);
   y += 4;
 
-  // Stats
-  const high = results.items?.filter(i => i.risk === 'high').length || 0;
-  const med  = results.items?.filter(i => i.risk === 'medium').length || 0;
-  const low  = results.items?.filter(i => i.risk === 'low').length || 0;
+  const high = results.clauses?.filter(i => i.riskLevel === 'HIGH').length || 0;
+  const med  = results.clauses?.filter(i => i.riskLevel === 'MEDIUM').length || 0;
+  const low  = results.clauses?.filter(i => i.riskLevel === 'LOW').length || 0;
   addText(`Issues found: ${high} High · ${med} Medium · ${low} Low`, 10, false, [180, 180, 180]);
   y += 6;
 
-  // Divider
   doc.setDrawColor(50, 50, 50);
   doc.line(MARGIN, y, W - MARGIN, y);
   y += 8;
 
-  // Clauses
   addText('Detailed Findings', 14, true, [255, 255, 255]);
   y += 2;
 
-  for (const item of (results.items || [])) {
-    const cfg = RISK_CONFIG[item.risk as keyof typeof RISK_CONFIG];
+  for (const item of (results.clauses || [])) {
     const bgMap: Record<string, [number,number,number]> = {
-      high: [60, 15, 15], medium: [60, 45, 10], low: [10, 30, 50]
+      HIGH: [60, 15, 15], MEDIUM: [60, 45, 10], LOW: [10, 30, 50]
     };
     const textMap: Record<string, [number,number,number]> = {
-      high: [220, 80, 80], medium: [220, 180, 60], low: [80, 160, 220]
+      HIGH: [220, 80, 80], MEDIUM: [220, 180, 60], LOW: [80, 160, 220]
     };
 
-    // Card
-    const cardH = 8 + (item.excerpt ? 20 : 0) + 16 + (item.suggestion ? 20 : 0) + 10;
-    drawRect(cardH, bgMap[item.risk]);
+    const cardH = 8 + (item.originalText ? 20 : 0) + 16 + (item.suggestion ? 20 : 0) + 10;
+    drawRect(cardH, bgMap[item.riskLevel]);
 
     let cy = y + 7;
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...textMap[item.risk]);
-    doc.text(`[${cfg.label}]`, MARGIN + 3, cy);
+    doc.setTextColor(...textMap[item.riskLevel]);
+    doc.text(`[${item.riskLevel}]`, MARGIN + 3, cy);
     doc.setTextColor(255, 255, 255);
     doc.text(item.title, MARGIN + 20, cy);
     cy += 7;
 
-    if (item.excerpt) {
+    if (item.originalText) {
       doc.setFontSize(8);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(180, 180, 180);
-      const excerptLines = doc.splitTextToSize(`"${item.excerpt}"`, COL - 10);
+      const excerptLines = doc.splitTextToSize(`"${item.originalText}"`, COL - 10);
       excerptLines.slice(0, 2).forEach((line: string) => {
         doc.text(line, MARGIN + 5, cy);
         cy += 5;
@@ -188,7 +178,7 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(200, 200, 200);
-    const descLines = doc.splitTextToSize(item.description, COL - 8);
+    const descLines = doc.splitTextToSize(item.riskReason, COL - 8);
     descLines.slice(0, 2).forEach((line: string) => {
       doc.text(line, MARGIN + 5, cy);
       cy += 5;
@@ -213,7 +203,6 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
     y += cardH + 4;
   }
 
-  // Disclaimer
   y += 6;
   doc.setDrawColor(50, 50, 50);
   doc.line(MARGIN, y, W - MARGIN, y);
@@ -230,20 +219,17 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
   addText(
     'Privacy: Your contract content was transmitted directly to the Anthropic Claude API for analysis. ' +
     'ContractGuard does not store, log, or retain your contract data on its servers. Your API key is ' +
-    'held in your browser session only and is never sent to ContractGuard infrastructure. ' +
-    'By using this service you acknowledge that your contract contents are processed by Anthropic in ' +
-    'accordance with their Privacy Policy at anthropic.com/privacy.',
+    'held in your browser session only and is never sent to ContractGuard infrastructure.',
     8, false, [120, 120, 120]
   );
 
-  // Footer
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80, 80, 80);
-    doc.text(`ContractGuard · contractguard.vercel.app · Page ${i} of ${pageCount}`, MARGIN, 290);
+    doc.text(`ContractGuard · contractguard-a3um.vercel.app · Page ${i} of ${pageCount}`, MARGIN, 290);
     doc.text('NOT LEGAL ADVICE', W - MARGIN, 290, { align: 'right' });
   }
 
@@ -254,28 +240,24 @@ export default function StepResults({ results, fileName, onReset }: Props) {
   const [pdfReady, setPdfReady] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const high   = results.items?.filter((i) => i.risk === 'high') || [];
-  const medium = results.items?.filter((i) => i.risk === 'medium') || [];
-  const low    = results.items?.filter((i) => i.risk === 'low') || [];
-  const overallRisk = high.length > 0 ? 'high' : medium.length > 0 ? 'medium' : 'low';
+  const high   = results.clauses?.filter((i) => i.riskLevel === 'HIGH') || [];
+  const medium = results.clauses?.filter((i) => i.riskLevel === 'MEDIUM') || [];
+  const low    = results.clauses?.filter((i) => i.riskLevel === 'LOW') || [];
+  const overallRisk = high.length > 0 ? 'HIGH' : medium.length > 0 ? 'MEDIUM' : 'LOW';
   const overallCfg  = RISK_CONFIG[overallRisk];
 
-  // Detect ?paid=true after Stripe redirect
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('paid') === 'true') {
-      // Restore results from sessionStorage
       const saved = sessionStorage.getItem('cg_results');
       const savedFile = sessionStorage.getItem('cg_filename');
       if (saved) {
         try {
           const restored = JSON.parse(saved) as AnalysisResult;
           setPdfReady(true);
-          // Auto-download
           generatePDF(restored, savedFile || fileName);
           sessionStorage.removeItem('cg_results');
           sessionStorage.removeItem('cg_filename');
-          // Clean URL
           window.history.replaceState({}, '', window.location.pathname);
         } catch {
           setPdfReady(false);
@@ -285,7 +267,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
   }, []);
 
   const handleStripeCheckout = () => {
-    // Save results to sessionStorage before redirect
     sessionStorage.setItem('cg_results', JSON.stringify(results));
     sessionStorage.setItem('cg_filename', fileName);
     window.location.href = STRIPE_LINK;
@@ -302,7 +283,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Paid success banner */}
       {pdfReady && (
         <div className="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -310,7 +290,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </div>
       )}
 
-      {/* Summary card */}
       <div className={`rounded-2xl border p-6 mb-8 ${overallCfg.border} ${overallCfg.bg}`}>
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${overallCfg.bg}`}>
@@ -339,9 +318,8 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </div>
       </div>
 
-      {/* Risk items */}
       <div className="space-y-3 mb-8">
-        {results.items?.length === 0 ? (
+        {results.clauses?.length === 0 ? (
           <div className="text-center py-12 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
             <p className="text-lg font-semibold text-emerald-400">No major issues found</p>
@@ -371,7 +349,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         )}
       </div>
 
-      {/* PDF download CTA */}
       <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
         <div className="flex items-start gap-4 mb-5">
           <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
@@ -398,7 +375,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </p>
       </div>
 
-      {/* Already paid button */}
       <div className="text-center mb-6">
         <button
           onClick={handleDownloadPDF}
@@ -409,7 +385,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </button>
       </div>
 
-      {/* Actions */}
       <div className="flex gap-3">
         <button
           onClick={onReset}
@@ -420,7 +395,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </button>
       </div>
 
-      {/* Disclaimer */}
       <div className="mt-8 bg-white/2 border border-white/6 rounded-xl p-5">
         <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Legal Disclaimer & Privacy</h4>
         <p className="text-white/25 text-xs leading-relaxed mb-3">
