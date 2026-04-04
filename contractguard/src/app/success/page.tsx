@@ -183,7 +183,7 @@ export default function SuccessPage() {
         )}
 
         
-          href="/"
+          <a href="/"
           className="flex items-center justify-center gap-2 text-white/30 hover:text-white/60 text-sm transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
