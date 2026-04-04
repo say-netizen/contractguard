@@ -1,14 +1,18 @@
-export type RiskLevel = 'high' | 'medium' | 'low';
+export type RiskLevel = 'HIGH' | 'MEDIUM' | 'LOW';
 
-export interface RiskItem {
+export interface RiskClause {
+  id: string;
   title: string;
-  risk: RiskLevel;
-  description: string;
-  excerpt?: string;
-  suggestion?: string;
+  originalText: string;
+  riskLevel: RiskLevel;
+  riskReason: string;
+  suggestion: string;
+  category: string;
 }
 
 export interface AnalysisResult {
+  contractType: string;
+  overallRisk: RiskLevel;
   summary: string;
-  items: RiskItem[];
+  clauses: RiskClause[];
 }
