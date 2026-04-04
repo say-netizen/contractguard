@@ -13,6 +13,6 @@ export default function Home() {
     }
   }, []);
 
-  if (started) return <AppShell onBack={() => setStarted(false)} initialPaid={true} />;
+  if (started) return <AppShell onBack={() => setStarted(false)} />;
   return <LandingPage onStart={() => setStarted(true)} />;
 }
