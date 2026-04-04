@@ -1,12 +1,18 @@
 'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import LandingPage from '@/components/LandingPage';
 import AppShell from '@/components/AppShell';
 
 export default function Home() {
   const [started, setStarted] = useState(false);
 
-  if (started) return <AppShell onBack={() => setStarted(false)} />;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === 'true') {
+      setStarted(true);
+    }
+  }, []);
+
+  if (started) return <AppShell onBack={() => setStarted(false)} initialPaid={true} />;
   return <LandingPage onStart={() => setStarted(true)} />;
 }
