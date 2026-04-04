@@ -66,6 +66,6 @@ export async function analyzeContract(
     const parsed = JSON.parse(text) as AnalysisResult;
     return parsed;
   } catch {
-    throw new Error("Failed to parse AI response. Please try again.");
+    throw new Error(`Parse failed. Raw: ${text.slice(0, 300)}`);
   }
 }
