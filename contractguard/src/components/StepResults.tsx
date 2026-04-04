@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, ExternalLink } from 'lucide-react';
-import { AnalysisResult, RiskClause } from '@/lib/types';
+import { AnalysisResult, RiskClause } from '@/lib/types';　
 
 interface Props {
   results: AnalysisResult;
