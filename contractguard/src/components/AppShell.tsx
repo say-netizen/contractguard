@@ -1,6 +1,5 @@
 'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, ArrowLeft } from 'lucide-react';
 import StepApiKey from './StepApiKey';
 import StepUpload from './StepUpload';
@@ -20,6 +19,23 @@ export default function AppShell({ onBack }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [results, setResults] = useState<AnalysisResult | null>(null);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paid') === 'true') {
+      const saved = sessionStorage.getItem('cg_results');
+      const savedFile = sessionStorage.getItem('cg_filename');
+      if (saved) {
+        try {
+          const restored = JSON.parse(saved) as AnalysisResult;
+          setResults(restored);
+          setStep('results');
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
+
   const steps = ['apikey', 'upload', 'analyzing', 'results'];
   const stepIndex = steps.indexOf(step);
 
@@ -36,7 +52,6 @@ export default function AppShell({ onBack }: Props) {
               <span className="font-bold tracking-tight">ContractGuard</span>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             {['API Key', 'Upload', 'Analyzing', 'Results'].map((label, i) => (
               <div key={label} className="flex items-center gap-2">
@@ -59,7 +74,6 @@ export default function AppShell({ onBack }: Props) {
           </div>
         </div>
       </header>
-
       <main className="max-w-3xl mx-auto px-6 py-12">
         {step === 'apikey' && (
           <StepApiKey apiKey={apiKey} onApiKeyChange={setApiKey} onNext={() => setStep('upload')} />
@@ -74,7 +88,7 @@ export default function AppShell({ onBack }: Props) {
           />
         )}
         {step === 'results' && results && (
-          <StepResults results={results} fileName={file?.name || ''}
+          <StepResults results={results} fileName={sessionStorage.getItem('cg_filename') || ''}
             onReset={() => { setFile(null); setResults(null); setStep('upload'); }}
           />
         )}
