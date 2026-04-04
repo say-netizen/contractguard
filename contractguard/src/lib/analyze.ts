@@ -63,9 +63,10 @@ export async function analyzeContract(
   const text = data.content.find((c) => c.type === "text")?.text || "";
 
   try {
-    const parsed = JSON.parse(text) as AnalysisResult;
-    return parsed;
-  } catch {
-    throw new Error(`Parse failed. Raw: ${text.slice(0, 300)}`);
-  }
+  const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const parsed = JSON.parse(clean) as AnalysisResult;
+  return parsed;
+} catch {
+  throw new Error("Failed to parse AI response. Please try again.");
+}
 }
