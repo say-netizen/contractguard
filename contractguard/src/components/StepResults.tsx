@@ -10,7 +10,7 @@ interface Props {
   onReset: () => void;
 }
 
-const STRIPE_LINK = 'https://buy.stripe.com/8x29AU5SG6sYgW0fUp9R604';
+const STRIPE_LINK = 'https://buy.stripe.com/test_7sY8wQgxdVqeNS37D9R600';
 
 const RISK_CONFIG = {
   HIGH:   { label: 'HIGH',   color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: AlertTriangle },
