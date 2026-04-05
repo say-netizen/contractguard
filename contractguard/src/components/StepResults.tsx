@@ -1,8 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, ExternalLink } from 'lucide-react';
-import { AnalysisResult, RiskClause } from '@/lib/types';　
+import { useState } from 'react';
+import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, Lock } from 'lucide-react';
+import { AnalysisResult, RiskClause } from '@/lib/types';
+import { loadStripe } from '@stripe/stripe-js';
+
+const STRIPE_PUBLISHABLE_KEY = 'pk_test_51T94WJLe7aOyxWo4VBzo9wEqOTeczdDsMiXjxWglOBt23T0ZO8GHGCw1kWFyupmt1o3jJ3RAX8fctWBhluoVAuPZ00ExFeBYL4';
+const STRIPE_PRICE_ID = 'price_1TIgbwLe7aOyxWo4BDOHAk3J';
 
 interface Props {
   results: AnalysisResult;
@@ -10,18 +14,36 @@ interface Props {
   onReset: () => void;
 }
 
-const STRIPE_LINK = 'https://buy.stripe.com/test_7sY8wQgxkdVqeNS37D9R600';
-
 const RISK_CONFIG = {
   HIGH:   { label: 'HIGH',   color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: AlertTriangle },
   MEDIUM: { label: 'MEDIUM', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', icon: AlertTriangle },
   LOW:    { label: 'LOW',    color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   icon: Info },
 };
 
-function RiskCard({ item }: { item: RiskClause }) {
-  const [open, setOpen] = useState(item.riskLevel === 'HIGH');
+function RiskCard({ item, locked }: { item: RiskClause; locked?: boolean }) {
+  const [open, setOpen] = useState(item.riskLevel === 'HIGH' && !locked);
   const cfg = RISK_CONFIG[item.riskLevel];
   const Icon = cfg.icon;
+
+  if (locked) {
+    return (
+      <div className={`border rounded-xl overflow-hidden ${cfg.border} ${cfg.bg} opacity-50 relative`}>
+        <div className="w-full flex items-start gap-4 p-5">
+          <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${cfg.color}`} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
+                {cfg.label}
+              </span>
+              <span className="font-semibold">{item.title}</span>
+            </div>
+            <p className="text-white/50 text-sm">Purchase to view details</p>
+          </div>
+          <Lock className="w-4 h-4 text-white/30 shrink-0 mt-1" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`border rounded-xl overflow-hidden ${cfg.border} ${cfg.bg}`}>
@@ -75,10 +97,7 @@ function RiskCard({ item }: { item: RiskClause }) {
 async function generatePDF(results: AnalysisResult, fileName: string) {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-
-  const W = 210;
-  const MARGIN = 20;
-  const COL = W - MARGIN * 2;
+  const W = 210, MARGIN = 20, COL = W - MARGIN * 2;
   let y = 20;
 
   const addText = (text: string, size: number, bold: boolean, color: [number,number,number], indent = 0) => {
@@ -114,15 +133,10 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
   y += 4;
 
   const overallRisk = results.overallRisk || 'LOW';
-  const riskColor: Record<string, [number,number,number]> = {
-    HIGH: [80, 20, 20], MEDIUM: [80, 60, 10], LOW: [10, 60, 40]
-  };
-  const riskText: Record<string, [number,number,number]> = {
-    HIGH: [220, 80, 80], MEDIUM: [220, 180, 60], LOW: [80, 200, 130]
-  };
+  const riskColor: Record<string, [number,number,number]> = { HIGH: [80,20,20], MEDIUM: [80,60,10], LOW: [10,60,40] };
+  const riskText: Record<string, [number,number,number]> = { HIGH: [220,80,80], MEDIUM: [220,180,60], LOW: [80,200,130] };
   drawRect(14, riskColor[overallRisk]);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11); doc.setFont('helvetica', 'bold');
   doc.setTextColor(...riskText[overallRisk]);
   doc.text(`OVERALL RISK: ${overallRisk}`, MARGIN + 4, y + 9);
   y += 18;
@@ -140,95 +154,48 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
   doc.setDrawColor(50, 50, 50);
   doc.line(MARGIN, y, W - MARGIN, y);
   y += 8;
-
   addText('Detailed Findings', 14, true, [255, 255, 255]);
   y += 2;
 
   for (const item of (results.clauses || [])) {
-    const bgMap: Record<string, [number,number,number]> = {
-      HIGH: [60, 15, 15], MEDIUM: [60, 45, 10], LOW: [10, 30, 50]
-    };
-    const textMap: Record<string, [number,number,number]> = {
-      HIGH: [220, 80, 80], MEDIUM: [220, 180, 60], LOW: [80, 160, 220]
-    };
-
+    const bgMap: Record<string, [number,number,number]> = { HIGH: [60,15,15], MEDIUM: [60,45,10], LOW: [10,30,50] };
+    const textMap: Record<string, [number,number,number]> = { HIGH: [220,80,80], MEDIUM: [220,180,60], LOW: [80,160,220] };
     const cardH = 8 + (item.originalText ? 20 : 0) + 16 + (item.suggestion ? 20 : 0) + 10;
     drawRect(cardH, bgMap[item.riskLevel]);
-
     let cy = y + 7;
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
     doc.setTextColor(...textMap[item.riskLevel]);
     doc.text(`[${item.riskLevel}]`, MARGIN + 3, cy);
     doc.setTextColor(255, 255, 255);
     doc.text(item.title, MARGIN + 20, cy);
     cy += 7;
-
     if (item.originalText) {
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'italic');
-      doc.setTextColor(180, 180, 180);
-      const excerptLines = doc.splitTextToSize(`"${item.originalText}"`, COL - 10);
-      excerptLines.slice(0, 2).forEach((line: string) => {
-        doc.text(line, MARGIN + 5, cy);
-        cy += 5;
-      });
+      doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(180, 180, 180);
+      const lines = doc.splitTextToSize(`"${item.originalText}"`, COL - 10);
+      lines.slice(0, 2).forEach((l: string) => { doc.text(l, MARGIN + 5, cy); cy += 5; });
     }
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(200, 200, 200);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(200, 200, 200);
     const descLines = doc.splitTextToSize(item.riskReason, COL - 8);
-    descLines.slice(0, 2).forEach((line: string) => {
-      doc.text(line, MARGIN + 5, cy);
-      cy += 5;
-    });
-
+    descLines.slice(0, 2).forEach((l: string) => { doc.text(l, MARGIN + 5, cy); cy += 5; });
     if (item.suggestion) {
-      cy += 2;
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(80, 200, 130);
-      doc.text('Suggested revision:', MARGIN + 5, cy);
-      cy += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(150, 220, 180);
+      cy += 2; doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(80, 200, 130);
+      doc.text('Suggested revision:', MARGIN + 5, cy); cy += 5;
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(150, 220, 180);
       const sugLines = doc.splitTextToSize(item.suggestion, COL - 10);
-      sugLines.slice(0, 2).forEach((line: string) => {
-        doc.text(line, MARGIN + 5, cy);
-        cy += 5;
-      });
+      sugLines.slice(0, 2).forEach((l: string) => { doc.text(l, MARGIN + 5, cy); cy += 5; });
     }
-
     y += cardH + 4;
   }
 
   y += 6;
-  doc.setDrawColor(50, 50, 50);
-  doc.line(MARGIN, y, W - MARGIN, y);
-  y += 8;
-  addText('Legal Disclaimer & Privacy Notice', 11, true, [150, 150, 150]);
-  addText(
-    'This report is generated by artificial intelligence and is provided for informational purposes only. ' +
-    'It does not constitute legal advice and should not be relied upon as such. ContractGuard makes no ' +
-    'representations or warranties regarding the accuracy, completeness, or applicability of this analysis ' +
-    'to your specific situation. Always consult a qualified attorney before signing any contract.',
-    8, false, [120, 120, 120]
-  );
-  y += 4;
-  addText(
-    'Privacy: Your contract content was transmitted directly to the Anthropic Claude API for analysis. ' +
-    'ContractGuard does not store, log, or retain your contract data on its servers. Your API key is ' +
-    'held in your browser session only and is never sent to ContractGuard infrastructure.',
-    8, false, [120, 120, 120]
-  );
+  doc.setDrawColor(50, 50, 50); doc.line(MARGIN, y, W - MARGIN, y); y += 8;
+  addText('Legal Disclaimer', 11, true, [150, 150, 150]);
+  addText('This report is for informational purposes only and does not constitute legal advice. Always consult a qualified attorney before signing any contract.', 8, false, [120, 120, 120]);
 
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
+    doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
     doc.text(`ContractGuard · contractguard-a3um.vercel.app · Page ${i} of ${pageCount}`, MARGIN, 290);
     doc.text('NOT LEGAL ADVICE', W - MARGIN, 290, { align: 'right' });
   }
@@ -237,39 +204,39 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
 }
 
 export default function StepResults({ results, fileName, onReset }: Props) {
-  const [pdfReady, setPdfReady] = useState(false);
+  const [paid, setPaid] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const high   = results.clauses?.filter((i) => i.riskLevel === 'HIGH') || [];
-  const medium = results.clauses?.filter((i) => i.riskLevel === 'MEDIUM') || [];
-  const low    = results.clauses?.filter((i) => i.riskLevel === 'LOW') || [];
+  const all    = results.clauses || [];
+  const high   = all.filter(i => i.riskLevel === 'HIGH');
+  const medium = all.filter(i => i.riskLevel === 'MEDIUM');
+  const low    = all.filter(i => i.riskLevel === 'LOW');
   const overallRisk = high.length > 0 ? 'HIGH' : medium.length > 0 ? 'MEDIUM' : 'LOW';
   const overallCfg  = RISK_CONFIG[overallRisk];
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('paid') === 'true') {
-      const saved = sessionStorage.getItem('cg_results');
-      const savedFile = sessionStorage.getItem('cg_filename');
-      if (saved) {
-        try {
-          const restored = JSON.parse(saved) as AnalysisResult;
-          setPdfReady(true);
-          generatePDF(restored, savedFile || fileName);
-          sessionStorage.removeItem('cg_results');
-          sessionStorage.removeItem('cg_filename');
-          window.history.replaceState({}, '', window.location.pathname);
-        } catch {
-          setPdfReady(false);
-        }
-      }
-    }
-  }, []);
+  // 無料で見せる件数
+  const FREE_LIMIT = 2;
+  const visibleClauses = all.slice(0, FREE_LIMIT);
+  const lockedClauses  = all.slice(FREE_LIMIT);
 
-  const handleStripeCheckout = () => {
-    sessionStorage.setItem('cg_results', JSON.stringify(results));
-    sessionStorage.setItem('cg_filename', fileName);
-    window.location.href = STRIPE_LINK;
+  const handlePayment = async () => {
+    setLoading(true);
+    try {
+      const stripe = await loadStripe(STRIPE_PUBLISHABLE_KEY);
+      if (!stripe) throw new Error('Stripe failed to load');
+
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
+      });
+      const { sessionId } = await res.json();
+      await stripe.redirectToCheckout({ sessionId });
+    } catch (e) {
+      console.error(e);
+      setLoading(false);
+    }
   };
 
   const handleDownloadPDF = async () => {
@@ -283,13 +250,14 @@ export default function StepResults({ results, fileName, onReset }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {pdfReady && (
+      {paid && (
         <div className="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
           <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-          <p className="text-emerald-300 text-sm font-medium">Payment confirmed! Your PDF has been downloaded.</p>
+          <p className="text-emerald-300 text-sm font-medium">Payment confirmed! Download your PDF below.</p>
         </div>
       )}
 
+      {/* Summary */}
       <div className={`rounded-2xl border p-6 mb-8 ${overallCfg.border} ${overallCfg.bg}`}>
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${overallCfg.bg}`}>
@@ -318,8 +286,9 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </div>
       </div>
 
+      {/* Clauses */}
       <div className="space-y-3 mb-8">
-        {results.clauses?.length === 0 ? (
+        {all.length === 0 ? (
           <div className="text-center py-12 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
             <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
             <p className="text-lg font-semibold text-emerald-400">No major issues found</p>
@@ -327,63 +296,58 @@ export default function StepResults({ results, fileName, onReset }: Props) {
           </div>
         ) : (
           <>
-            {high.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-red-400 uppercase tracking-wider mb-3">High Risk</h3>
-                <div className="space-y-3">{high.map((item, i) => <RiskCard key={i} item={item} />)}</div>
-              </div>
+            {visibleClauses.map((item, i) => <RiskCard key={i} item={item} />)}
+            {lockedClauses.length > 0 && !paid && (
+              <>
+                {lockedClauses.map((item, i) => <RiskCard key={i + FREE_LIMIT} item={item} locked />)}
+                <div className="text-center py-4 text-white/40 text-sm">
+                  🔒 {lockedClauses.length} more issues hidden — purchase to unlock
+                </div>
+              </>
             )}
-            {medium.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-yellow-400 uppercase tracking-wider mb-3">Medium Risk</h3>
-                <div className="space-y-3">{medium.map((item, i) => <RiskCard key={i} item={item} />)}</div>
-              </div>
-            )}
-            {low.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-blue-400 uppercase tracking-wider mb-3">Low Risk</h3>
-                <div className="space-y-3">{low.map((item, i) => <RiskCard key={i} item={item} />)}</div>
-              </div>
-            )}
+            {paid && lockedClauses.map((item, i) => <RiskCard key={i + FREE_LIMIT} item={item} />)}
           </>
         )}
       </div>
 
-      <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
-        <div className="flex items-start gap-4 mb-5">
-          <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
-            <Download className="w-5 h-5 text-emerald-400" />
+      {/* CTA */}
+      {!paid ? (
+        <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
+          <div className="flex items-start gap-4 mb-5">
+            <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+              <Download className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg mb-1">Unlock Full Report + PDF</h3>
+              <p className="text-white/50 text-sm leading-relaxed">
+                See all {lockedClauses.length} hidden issues, suggested revisions, and download a formatted PDF report.
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-bold text-lg mb-1">Download Full PDF Report</h3>
-            <p className="text-white/50 text-sm leading-relaxed">
-              Get a formatted PDF with all findings, original clause excerpts, and revision suggestions.
-              Perfect for sharing with a lawyer or client.
-            </p>
-          </div>
+          <button
+            onClick={handlePayment}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:scale-[1.02] disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            {loading ? 'Redirecting...' : 'Unlock Full Report — $9'}
+          </button>
+          <p className="text-center text-white/25 text-xs mt-3">
+            Secure payment via Stripe · One-time purchase
+          </p>
         </div>
-        <button
-          onClick={handleStripeCheckout}
-          className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:scale-[1.02]"
-        >
-          <Download className="w-5 h-5" />
-          Download PDF Report — $9
-          <ExternalLink className="w-4 h-4 opacity-60" />
-        </button>
-        <p className="text-center text-white/25 text-xs mt-3">
-          Secure payment via Stripe · One-time purchase · Instant download after payment
-        </p>
-      </div>
-
-      <div className="text-center mb-6">
-        <button
-          onClick={handleDownloadPDF}
-          disabled={generating}
-          className="text-white/30 hover:text-white/60 text-sm underline underline-offset-2 transition-colors disabled:opacity-30"
-        >
-          {generating ? 'Generating PDF...' : 'Already paid? Click here to download'}
-        </button>
-      </div>
+      ) : (
+        <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
+          <button
+            onClick={handleDownloadPDF}
+            disabled={generating}
+            className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg disabled:opacity-50"
+          >
+            <Download className="w-5 h-5" />
+            {generating ? 'Generating PDF...' : 'Download PDF Report'}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-3">
         <button
@@ -398,18 +362,10 @@ export default function StepResults({ results, fileName, onReset }: Props) {
       <div className="mt-8 bg-white/2 border border-white/6 rounded-xl p-5">
         <h4 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Legal Disclaimer & Privacy</h4>
         <p className="text-white/25 text-xs leading-relaxed mb-3">
-          <strong className="text-white/40">Not legal advice.</strong> This analysis is generated by AI and is for informational purposes only.
-          It does not constitute legal advice, and ContractGuard is not a law firm or attorney.
-          Results may be incomplete or inaccurate. Always consult a qualified attorney before signing any contract.
+          <strong className="text-white/40">Not legal advice.</strong> This analysis is generated by AI and is for informational purposes only. Always consult a qualified attorney before signing any contract.
         </p>
         <p className="text-white/25 text-xs leading-relaxed">
-          <strong className="text-white/40">Data handling.</strong> Your contract content is transmitted directly to the Anthropic Claude API for analysis.
-          ContractGuard does not store, log, or retain your contract data on its servers at any point.
-          Your API key is held in your browser session only and is never sent to ContractGuard&apos;s infrastructure.
-          By using this service, you acknowledge that your contract is processed by Anthropic under their{' '}
-          <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" className="text-emerald-400/50 hover:text-emerald-400 underline">
-            Privacy Policy
-          </a>.
+          <strong className="text-white/40">Data handling.</strong> Your contract is transmitted directly to Anthropic Claude API. ContractGuard does not store your contract data.
         </p>
       </div>
     </div>
