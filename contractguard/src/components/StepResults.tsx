@@ -3,10 +3,8 @@
 import { useState } from 'react';
 import { AlertTriangle, CheckCircle, Info, ChevronDown, ChevronUp, RefreshCw, Download, Shield, Lock } from 'lucide-react';
 import { AnalysisResult, RiskClause } from '@/lib/types';
-import { loadStripe } from '@stripe/stripe-js';
 
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_51T94WJLe7aOyxWo4VBzo9wEqOTeczdDsMiXjxWglOBt23T0ZO8GHGCw1kWFyupmt1o3jJ3RAX8fctWBhluoVAuPZ00ExFeBYL4';
-const STRIPE_PRICE_ID = 'price_1TIgbwLe7aOyxWo4BDOHAk3J';
+const STRIPE_LINK = 'https://buy.stripe.com/8x29AU5SG6sYgW0fUp9R604';
 
 interface Props {
   results: AnalysisResult;
@@ -204,7 +202,6 @@ async function generatePDF(results: AnalysisResult, fileName: string) {
 }
 
 export default function StepResults({ results, fileName, onReset }: Props) {
-  const [paid, setPaid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -215,28 +212,15 @@ export default function StepResults({ results, fileName, onReset }: Props) {
   const overallRisk = high.length > 0 ? 'HIGH' : medium.length > 0 ? 'MEDIUM' : 'LOW';
   const overallCfg  = RISK_CONFIG[overallRisk];
 
-  // 無料で見せる件数
   const FREE_LIMIT = 2;
   const visibleClauses = all.slice(0, FREE_LIMIT);
   const lockedClauses  = all.slice(FREE_LIMIT);
 
-  const handlePayment = async () => {
+  const handlePayment = () => {
     setLoading(true);
-    try {
-      const stripe = await loadStripe(STRIPE_PUBLISHABLE_KEY);
-      if (!stripe) throw new Error('Stripe failed to load');
-
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: STRIPE_PRICE_ID }),
-      });
-      const { sessionId } = await res.json();
-      await stripe.redirectToCheckout({ sessionId });
-    } catch (e) {
-      console.error(e);
-      setLoading(false);
-    }
+    sessionStorage.setItem('cg_results', JSON.stringify(results));
+    sessionStorage.setItem('cg_filename', fileName);
+    window.location.href = STRIPE_LINK;
   };
 
   const handleDownloadPDF = async () => {
@@ -250,14 +234,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {paid && (
-        <div className="mb-6 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-          <p className="text-emerald-300 text-sm font-medium">Payment confirmed! Download your PDF below.</p>
-        </div>
-      )}
-
-      {/* Summary */}
       <div className={`rounded-2xl border p-6 mb-8 ${overallCfg.border} ${overallCfg.bg}`}>
         <div className="flex items-start gap-4">
           <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${overallCfg.bg}`}>
@@ -286,7 +262,6 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         </div>
       </div>
 
-      {/* Clauses */}
       <div className="space-y-3 mb-8">
         {all.length === 0 ? (
           <div className="text-center py-12 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl">
@@ -297,7 +272,7 @@ export default function StepResults({ results, fileName, onReset }: Props) {
         ) : (
           <>
             {visibleClauses.map((item, i) => <RiskCard key={i} item={item} />)}
-            {lockedClauses.length > 0 && !paid && (
+            {lockedClauses.length > 0 && (
               <>
                 {lockedClauses.map((item, i) => <RiskCard key={i + FREE_LIMIT} item={item} locked />)}
                 <div className="text-center py-4 text-white/40 text-sm">
@@ -305,49 +280,44 @@ export default function StepResults({ results, fileName, onReset }: Props) {
                 </div>
               </>
             )}
-            {paid && lockedClauses.map((item, i) => <RiskCard key={i + FREE_LIMIT} item={item} />)}
           </>
         )}
       </div>
 
-      {/* CTA */}
-      {!paid ? (
-        <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
-          <div className="flex items-start gap-4 mb-5">
-            <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
-              <Download className="w-5 h-5 text-emerald-400" />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg mb-1">Unlock Full Report + PDF</h3>
-              <p className="text-white/50 text-sm leading-relaxed">
-                See all {lockedClauses.length} hidden issues, suggested revisions, and download a formatted PDF report.
-              </p>
-            </div>
+      <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
+        <div className="flex items-start gap-4 mb-5">
+          <div className="bg-emerald-500/10 w-10 h-10 rounded-xl flex items-center justify-center shrink-0">
+            <Download className="w-5 h-5 text-emerald-400" />
           </div>
-          <button
-            onClick={handlePayment}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:scale-[1.02] disabled:opacity-50"
-          >
-            <Download className="w-5 h-5" />
-            {loading ? 'Redirecting...' : 'Unlock Full Report — $9'}
-          </button>
-          <p className="text-center text-white/25 text-xs mt-3">
-            Secure payment via Stripe · One-time purchase
-          </p>
+          <div>
+            <h3 className="font-bold text-lg mb-1">Unlock Full Report + PDF</h3>
+            <p className="text-white/50 text-sm leading-relaxed">
+              See all {lockedClauses.length} hidden issues, suggested revisions, and download a formatted PDF report.
+            </p>
+          </div>
         </div>
-      ) : (
-        <div className="bg-white/3 border border-white/10 rounded-2xl p-6 mb-6">
-          <button
-            onClick={handleDownloadPDF}
-            disabled={generating}
-            className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg disabled:opacity-50"
-          >
-            <Download className="w-5 h-5" />
-            {generating ? 'Generating PDF...' : 'Download PDF Report'}
-          </button>
-        </div>
-      )}
+        <button
+          onClick={handlePayment}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black py-4 rounded-xl transition-all text-lg shadow-[0_0_20px_rgba(16,185,129,0.2)] hover:scale-[1.02] disabled:opacity-50"
+        >
+          <Download className="w-5 h-5" />
+          {loading ? 'Redirecting...' : 'Unlock Full Report — $2.99'}
+        </button>
+        <p className="text-center text-white/25 text-xs mt-3">
+          Secure payment via Stripe · One-time purchase
+        </p>
+      </div>
+
+      <div className="text-center mb-6">
+        <button
+          onClick={handleDownloadPDF}
+          disabled={generating}
+          className="text-white/30 hover:text-white/60 text-sm underline underline-offset-2 transition-colors disabled:opacity-30"
+        >
+          {generating ? 'Generating PDF...' : 'Already paid? Click here to download'}
+        </button>
+      </div>
 
       <div className="flex gap-3">
         <button
