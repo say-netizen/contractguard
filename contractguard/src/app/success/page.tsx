@@ -210,7 +210,20 @@ JSON structure:
           </>
         ) : (
           <>
-            <p className="text-white/50 mb-6">Please re-upload your contract to generate the PDF.</p>
+            <p className="text-white/50 mb-2">Please re-upload your contract to generate your PDF.</p>
+<div className="bg-white/3 border border-white/8 rounded-xl p-4 mb-6 text-left">
+  <p className="text-white/60 text-sm leading-relaxed mb-2">
+    <strong className="text-white/80">Why is this needed?</strong><br />
+    For security, your contract and analysis results are never stored on our servers.
+    When you were redirected to Stripe&apos;s payment page, your browser session was reset —
+    this is normal behavior for cross-site redirects.
+  </p>
+  <p className="text-white/60 text-sm leading-relaxed">
+    <strong className="text-emerald-400">No extra API cost.</strong> We already have your analysis.
+    Re-uploading simply rebuilds your PDF from the contract text locally —
+    your API key will not be charged again.
+  </p>
+</div>
             <div className="space-y-4 text-left mb-6">
               <div>
                 <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">API Key</label>
