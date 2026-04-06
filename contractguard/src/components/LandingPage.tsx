@@ -83,8 +83,13 @@ export default function LandingPage({ onStart }: Props) {
       </section>
 
       <footer className="border-t border-white/5 px-6 py-12 text-center text-white/20 text-[10px] uppercase tracking-widest font-mono">
-        &copy; 2026 ContractGuard // AI Contract Risk Detection // Not Legal Advice
-      </footer>
+  <p>&copy; 2026 ContractGuard // AI Contract Risk Detection // Not Legal Advice</p>
+  <div className="flex items-center justify-center gap-6 mt-4">
+    <a href="/terms" className="hover:text-white/40 transition-colors">Terms of Service</a>
+    <a href="/privacy" className="hover:text-white/40 transition-colors">Privacy Policy</a>
+    <a href="mailto:aeoseiya@gmail.com" className="hover:text-white/40 transition-colors">Contact</a>
+  </div>
+</footer>
     </div>
   );
 }
